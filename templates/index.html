@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Volapük Accuracy-First MT v4</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--ink:#17202a;--muted:#687386;--line:#dce2e9;--blue:#3656d4;--dark:#101828;--ok:#137447;--warn:#956300;--bad:#b42318}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif;color:var(--ink)}
+main{max-width:1200px;margin:auto;padding:25px 20px 60px}h1{margin:0;font-size:28px}.sub{color:var(--muted);font-size:13px;line-height:1.7;margin:6px 0 16px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:17px;box-shadow:0 3px 12px rgba(16,24,40,.035)}
+textarea{width:100%;min-height:330px;border:1px solid var(--line);border-radius:12px;padding:14px;resize:vertical;font:inherit;line-height:1.65}button,select,input{font:inherit}
+button{border:0;border-radius:9px;padding:9px 13px;font-weight:750;cursor:pointer}.primary{background:var(--blue);color:#fff}.secondary{background:#edf1f5}.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.output{min-height:330px;background:var(--dark);color:#f8fafc;border-radius:12px;padding:15px;white-space:pre-wrap;line-height:1.7}
+.badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:800}.READY{background:#eaf7ef;color:var(--ok)}.REVIEW{background:#fff6dd;color:var(--warn)}.HOLD{background:#fff0ee;color:var(--bad)}
+.section{margin-top:15px}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px 7px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}th{font-size:11px;color:var(--muted)}
+.small{font-size:12px;color:var(--muted);line-height:1.65}.stats{display:flex;gap:8px;flex-wrap:wrap}.stat{background:#f7f8fa;border-radius:10px;padding:9px 12px}.stat b{display:block}
+input[type=file]{max-width:100%}@media(max-width:850px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body><main>
+<h1>Volapük Accuracy-First MT <span style="font-size:14px;color:#687386">v4 · Full Dictionary / Long Text</span></h1>
+<div class="sub">多言語長文 → 英語意味橋渡し → 全辞書索引 → 保守的なVolapük生成。分からない箇所は流暢に捏造せずHOLD。</div>
+
+<div class="grid">
+<div class="card">
+<h2>長文翻訳</h2>
+<textarea id="src">I read a new book yesterday. We study at the university.</textarea>
+<div class="toolbar">
+<select id="lang"><option value="auto">言語を自動判定</option><option value="en">English</option><option value="ja">日本語</option><option value="de">Deutsch</option><option value="fr">Français</option><option value="es">Español</option><option value="zh">中文</option><option value="ko">한국어</option><option value="ru">Русский</option></select>
+<button class="primary" id="go">翻訳</button><button class="secondary" id="copy">結果コピー</button>
+</div>
+<div id="bridge" class="small" style="margin-top:10px"></div>
+</div>
+<div class="card">
+<h2>Volapük</h2><div id="global"></div><div class="output" id="out"></div>
+</div>
+</div>
+
+<div class="card section">
+<h2>文ごとの公開判定</h2>
+<table><thead><tr><th>#</th><th>English bridge</th><th>Volapük</th><th>判定</th><th>問題</th></tr></thead><tbody id="rows"></tbody></table>
+</div>
+
+<div class="grid section">
+<div class="card">
+<h2>辞書全文をローカル取込</h2>
+<div class="small">著作権上、辞書全文データはこの配布物に含めていません。手元のPDF/DOCXを選ぶと、全行をローカルDBへ保存し、双方向で一致した語をX2として自動利用します。</div>
+<div class="toolbar"><label>English→Volapük<br><input id="envo" type="file" accept=".pdf,.docx,.txt"></label></div>
+<div class="toolbar"><label>Volapük→English<br><input id="voen" type="file" accept=".pdf,.docx,.txt"></label></div>
+<div class="toolbar"><button class="primary" id="import">辞書を再構築</button></div>
+<div id="importmsg" class="small"></div>
+</div>
+<div class="card">
+<h2>辞書状態</h2><div id="stats" class="stats"></div>
+<h3>検索</h3><div class="toolbar"><input id="dq" value="book" style="flex:1;padding:8px;border:1px solid var(--line);border-radius:8px"><button class="secondary" id="search">検索</button></div>
+<table><thead><tr><th>English</th><th>Volapük</th><th>POS</th><th>Grade</th><th>信頼度</th></tr></thead><tbody id="drows"></tbody></table>
+</div>
+</div>
+
+<div class="card section">
+<h2>READYの意味</h2>
+<div class="small">READYは「このエンジンが検証できる範囲で、意味橋渡し・構文・辞書語義・語形に未解決事項がない」という判定。自然言語には本質的な曖昧さがあるため、任意の長文すべてがREADYになることは保証しません。精度最優先なので、曖昧な文はHOLDになります。</div>
+</div>
+
+<script>
+const $=x=>document.getElementById(x);
+async function stats(){const j=await fetch("/api/stats").then(r=>r.json());$("stats").innerHTML=Object.entries(j).map(([k,v])=>`<div class="stat"><b>${v}</b><span>${k}</span></div>`).join("")}
+$("go").onclick=async()=>{
+ $("out").textContent="";$("rows").innerHTML="";$("global").innerHTML="処理中…";
+ const j=await fetch("/api/translate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:$("src").value,source_lang:$("lang").value})}).then(r=>r.json());
+ $("global").innerHTML=`<span class="badge ${j.status}">${j.status}</span>`;
+ $("out").textContent=j.output||"";
+ if(j.bridge)$("bridge").textContent=`source=${j.bridge.source_lang} | path=${(j.bridge.path||[]).join(" → ")} | ${j.bridge.note||""}`;
+ $("rows").innerHTML=(j.sentences||[]).map((x,i)=>`<tr><td>${i+1}</td><td>${x.english}</td><td>${x.output||"—"}</td><td><span class="badge ${x.status}">${x.status}</span></td><td>${(x.issues||[]).join("<br>")}</td></tr>`).join("");
+}
+$("copy").onclick=()=>navigator.clipboard?.writeText($("out").textContent);
+$("import").onclick=async()=>{
+ const fd=new FormData();if($("envo").files[0])fd.append("envo",$("envo").files[0]);if($("voen").files[0])fd.append("voen",$("voen").files[0]);
+ $("importmsg").textContent="取込中…";
+ const r=await fetch("/api/import",{method:"POST",body:fd});const j=await r.json();$("importmsg").textContent=JSON.stringify(j);stats();
+}
+$("search").onclick=async()=>{const j=await fetch("/api/search?q="+encodeURIComponent($("dq").value)).then(r=>r.json());$("drows").innerHTML=j.map(x=>`<tr><td>${x.english}</td><td><b>${x.volapuk}</b></td><td>${x.pos||""}</td><td>${x.grade}</td><td>${x.confidence.toFixed(2)}</td></tr>`).join("")}
+stats();$("go").click();
+</script>
+</main></body></html>
