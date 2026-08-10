@@ -13,7 +13,8 @@ UPLOAD_DIR=Path(os.environ.get("VOLAPUK_UPLOAD_DIR", str(DB_PATH.parent/"uploads
 DB=DictionaryDB(DB_PATH,BASE/"data/core_lexicon.json")
 ENGINE=EnglishToVolapuk(DB)
 
-app=Flask(__name__,max_content_length=32*1024*1024)
+app=Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024
 
 @app.get("/")
 def index():
