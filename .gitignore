@@ -1,0 +1,18 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store
+.env
+
+# Runtime/imported dictionary data. Do NOT publish imported dictionaries by default.
+data/*.sqlite3
+data/*.sqlite3-*
+data/uploads/
+*.pdf
+*.docx
+
+# IDE
+.vscode/
+.idea/
