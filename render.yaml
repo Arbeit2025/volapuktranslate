@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: volapuk-accuracy-mt
+    runtime: python
+    buildCommand: bash build.sh
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120 app:app
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: VOLAPUK_DB_PATH
+        value: /opt/render/project/src/data/volapuk.sqlite3
+      - key: ARGOS_SOURCE_LANGS
+        value: ja
