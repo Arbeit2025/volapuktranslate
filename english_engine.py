@@ -36,11 +36,17 @@ class EnglishToVolapuk:
 
     def unique_lex(self,lemma,pos=None):
         cs=self.db.lookup(lemma,pos)
-        trusted=[c for c in cs if c.grade in {"A","X2"} and c.confidence>=0.80]
-        keys={(c.volapuk,c.pos,c.sense) for c in trusted}
-        if len(keys)==1:return trusted[0],None
+        # A = locally curated, X2 = locally cross-confirmed, R = exact unique
+        # match from the official remote dictionary. Remote candidates are only
+        # trusted when the Volapük form is unique for the requested lemma/POS.
+        trusted=[c for c in cs if c.grade in {"A","X2","R"} and c.confidence>=0.80]
+        forms={c.volapuk for c in trusted}
+        if len(forms)==1:
+            # Prefer local evidence when the same form occurs in several layers.
+            trusted.sort(key=lambda c: ({"A":3,"X2":2,"R":1}.get(c.grade,0),c.confidence), reverse=True)
+            return trusted[0],None
         if not trusted:return None,f"no trusted dictionary entry for {lemma!r} ({pos or 'any POS'})"
-        return None,f"multiple trusted senses for {lemma!r}: "+", ".join(sorted({c.volapuk for c in trusted}))
+        return None,f"multiple trusted senses for {lemma!r}: "+", ".join(sorted(forms))
 
     def _person(self,subj):
         low=subj.lemma_.lower()
@@ -181,8 +187,6 @@ class EnglishToVolapuk:
             if er:issues.append(er)
             else:parts.append(ac.volapuk);evidence.append(asdict(ac))
 
-        if obj: pass
-        if iobj: pass
         for t in doc:
             if t.pos_=="PROPN":
                 issues.append("proper name unresolved: "+t.text)
